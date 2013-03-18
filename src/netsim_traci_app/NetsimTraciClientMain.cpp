@@ -14,7 +14,9 @@
 #include <iostream>
 #include <string>
 #include <cstdlib>
+#include <vector>
 #include "NetsimTraciClient.h"
+
 
 
 // ===========================================================================
@@ -27,23 +29,23 @@ using namespace netsimtraciclient;
 // method definitions
 // ===========================================================================
 int main(int argc, char* argv[]) {
-    std::string defFile = "";
     std::string outFileName = "testclient_out.txt";
     int port = -1;
     std::string host = "localhost";
+    std::string strBeginTime = "", strEndTime = "";
 
     if ((argc == 1) || (argc % 2 == 0)) {
-        std::cout << "Usage: NetsimTraciClient -def <definition_file>  -p <remote port>"
-                  << "[-h <remote host>] [-o <outputfile name>]" << std::endl;
+        std::cout << "Usage: NetsimTraciClient -p <remote port>"
+                  << "[-h <remote host>] [-o <outputfile name>]"
+                  << "[-b <begin time>] [-e <end time>]"
+                  << std::endl;
         return 0;
     }
 
     for (int i = 1; i < argc; i++) {
         std::string arg = argv[i];
-        if (arg.compare("-def") == 0) {
-            defFile = argv[i + 1];
-            i++;
-        } else if (arg.compare("-o") == 0) {
+
+        if (arg.compare("-o") == 0) {
             outFileName = argv[i + 1];
             i++;
         } else if (arg.compare("-p") == 0) {
@@ -51,6 +53,12 @@ int main(int argc, char* argv[]) {
             i++;
         } else if (arg.compare("-h") == 0) {
             host = argv[i + 1];
+            i++;
+        } else if (arg.compare("-b") == 0) {
+            strBeginTime = argv[i + 1];
+            i++;
+        } else if (arg.compare("-e") == 0) {
+            strEndTime = argv[i + 1];
             i++;
         } else {
             std::cout << "unknown parameter: " << argv[i] << std::endl;
@@ -62,11 +70,6 @@ int main(int argc, char* argv[]) {
         std::cout << "Missing port" << std::endl;
         return 1;
     }
-    if (defFile.compare("") == 0) {
-        std::cout << "Missing definition file" << std::endl;
-        return 1;
-    }
-
 
     ////////////////////////////////////////////
     // Start Ns3 from the given path
@@ -76,6 +79,12 @@ int main(int argc, char* argv[]) {
     // Start sumo with given remote port
     ///////////////////////////////////////////
 
+    ///////////////////////////////////////////
+    // Start TraCI Sumo Client
+    ///////////////////////////////////////////
     NetsimTraciClient client(outFileName);
-    return !client.run(defFile, port, host);
+    return !client.run(port, host, strBeginTime, strEndTime);
+
+
+
 }

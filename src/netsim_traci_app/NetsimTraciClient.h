@@ -43,7 +43,10 @@ public:
      * @param[in] port The server port to connect to
      * @param[in] host The server name to connect to
      */
-    bool run(std::string fileName, int port, std::string host = "localhost");
+    //bool run(std::string fileName, int port, std::string host = "localhost");
+    bool run(int port, std::string host = "localhost",
+            const std::string& strBeginTime = std::string(),
+            const std::string& strEndTime = std::string());
 
 
 protected:
@@ -87,8 +90,8 @@ protected:
      * @param[in] varNo The number of subscribed variables
      * @param[in] defFile The stream to read variable values from
      */
-    void commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, int varNo, std::ifstream& defFile);
-
+    //void commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, int varNo, std::ifstream& defFile);
+    void commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, const std::vector<int>& vars);
 
     /** @brief Sends and validates a SubscribeContext command
      * @param[in] domID The ID of the domain the addressed object belongs to
@@ -168,6 +171,9 @@ private:
 
     /// @brief Stream containing the log
     std::stringstream answerLog;
+
+    std::vector<std::string> vehList;
+    int lastVehListSize;
 
 };
 

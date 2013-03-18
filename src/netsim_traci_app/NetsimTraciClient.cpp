@@ -40,7 +40,7 @@ using namespace netsimtraciclient;
 // method definitions
 // ===========================================================================
 NetsimTraciClient::NetsimTraciClient(std::string outputFileName)
-    : outputFileName(outputFileName), answerLog("") {
+    : outputFileName(outputFileName), answerLog(""), lastVehListSize(0) {
     answerLog.setf(std::ios::fixed , std::ios::floatfield); // use decimal format
     answerLog.setf(std::ios::showpoint); // print decimal point
     answerLog << std::setprecision(2);
@@ -51,7 +51,7 @@ NetsimTraciClient::~NetsimTraciClient() {
     writeResult();
 }
 
-
+#if 0
 bool
 NetsimTraciClient::run(std::string fileName, int port, std::string host) {
     std::ifstream defFile;
@@ -156,7 +156,79 @@ NetsimTraciClient::run(std::string fileName, int port, std::string host) {
     close();
     return true;
 }
+#endif
 
+bool
+NetsimTraciClient::run(int port, std::string host, const std::string& strBeginTime, const std::string& strEndTime) {
+    std::stringstream msg;
+    SUMOTime currTime = string2time(strBeginTime)/1000, endTime = string2time(strEndTime)/1000;
+    std::cout << currTime << " " << endTime << std::endl;
+
+    // try to connect
+    try {
+        TraCIAPI::connect(host, port);
+    } catch (tcpip::SocketException& e) {
+        std::stringstream msg;
+        msg << "#Error while connecting: " << e.what();
+        errorMsg(msg);
+        return false;
+    }
+
+
+    // Subscribe command to list ids of all vehicles currently running within the scenario
+    std::vector<int> idListVars;
+    idListVars.push_back(ID_LIST);
+    commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,"dummyObjId",
+            string2time(strBeginTime), string2time(strEndTime), idListVars);
+
+    // Advance simulation
+    commandSimulationStep(currTime);
+    currTime++;
+
+    // Add first vehicle to vehList global table
+    vehList.push_back("veh0");
+    lastVehListSize = vehList.size();
+
+    // Subscribe command VAR_SPEED and VAR_POSITION for first vehicle in the vehList
+    std::vector<int> getVehVars;
+    getVehVars.push_back(VAR_SPEED);
+    getVehVars.push_back(VAR_POSITION);
+    commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,
+                                   vehList.at(0), currTime,
+                                   endTime, getVehVars);
+
+    // Start simulation loop
+    for(; currTime <= endTime; currTime++)
+        {
+        std::cout << "currTime " << currTime << std::endl;
+        // Subscribe command VAR_SPEED and VAR_POSITION for every new vehicle
+        if(lastVehListSize < vehList.size())
+            {
+            for(int i = lastVehListSize-1; i < vehList.size(); i++)
+                {
+                answerLog << "Veh added " << vehList.at(i) << std::endl;
+                commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,
+                                               vehList.at(i), currTime,
+                                               endTime, getVehVars);
+                }
+            }
+        else
+            {
+            answerLog << "No new Veh" << std::endl;
+            }
+
+        // Advance simulation
+        commandSimulationStep(currTime);
+
+        // Set vehList size;
+        lastVehListSize = vehList.size();
+        }
+
+    commandClose();
+    close();
+    std::cout << answerLog.str() << std::endl;
+    return true;
+}
 
 // ---------- Commands handling
 void
@@ -246,18 +318,35 @@ NetsimTraciClient::commandSetValue(int domID, int varID, const std::string& objI
 }
 
 
+//void
+//NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, int varNo, std::ifstream& defFile) {
+//    std::vector<int> vars;
+//    for (int i = 0; i < varNo; ++i) {
+//        int var;
+//        defFile >> var;
+//        // variable id
+//        vars.push_back(var);
+//    }
+//    send_commandSubscribeObjectVariable(domID, objID, beginTime, endTime, vars);
+//    answerLog << std::endl << "-> Command sent: <SubscribeVariable>:" << std::endl
+//              << "  domID=" << domID << " objID=" << objID << " with " << varNo << " variables" << std::endl;
+//    tcpip::Storage inMsg;
+//    try {
+//        std::string acknowledgement;
+//        check_resultState(inMsg, domID, false, &acknowledgement);
+//        answerLog << acknowledgement << std::endl;
+//        validateSubscription(inMsg);
+//    } catch (tcpip::SocketException& e) {
+//        answerLog << e.what() << std::endl;
+//    }
+//}
+
 void
-NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, int varNo, std::ifstream& defFile) {
-    std::vector<int> vars;
-    for (int i = 0; i < varNo; ++i) {
-        int var;
-        defFile >> var;
-        // variable id
-        vars.push_back(var);
-    }
+NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, const std::vector<int>& vars) {
+
     send_commandSubscribeObjectVariable(domID, objID, beginTime, endTime, vars);
     answerLog << std::endl << "-> Command sent: <SubscribeVariable>:" << std::endl
-              << "  domID=" << domID << " objID=" << objID << " with " << varNo << " variables" << std::endl;
+              << "  domID=" << domID << " objID=" << objID << " with " << vars.size() << " variables" << std::endl;
     tcpip::Storage inMsg;
     try {
         std::string acknowledgement;
