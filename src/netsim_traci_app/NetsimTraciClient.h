@@ -162,6 +162,14 @@ private:
      * @param[in] valueDataType The type of the expected value
      */
     void readAndReportTypeDependent(tcpip::Storage& inMsg, int valueDataType);
+    void readReportAndUpdateTypeDependent(int cmdId, int varId, std::string objId,
+         tcpip::Storage& inMsg, int valueDataType);
+
+    void doSubscriptionIdList(int currTimeInSec, int endTimeInSec);
+    void doSubscriptionSpeedAndPos(int currTimeInSec, int endTimeInSec);
+    void clearActiveLists();
+    void displayActiveLists();
+
     /// @}
 
 
@@ -172,8 +180,13 @@ private:
     /// @brief Stream containing the log
     std::stringstream answerLog;
 
-    std::vector<std::string> vehList;
-    int lastVehListSize;
+    typedef std::map<std::string, double > VehicleStateList;
+    VehicleStateList m_vehicleStateList;
+
+    //int lastVehicleStateListSize;
+
+    std::vector<std::string> m_vehicleList;
+    //std::vector<std::string> m_subscribedVehicleList;
 
 };
 

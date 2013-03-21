@@ -9,6 +9,7 @@
 #include "config.h"
 #endif
 
+#include <algorithm>
 #include <vector>
 #include <iostream>
 #include <iomanip>
@@ -40,7 +41,7 @@ using namespace netsimtraciclient;
 // method definitions
 // ===========================================================================
 NetsimTraciClient::NetsimTraciClient(std::string outputFileName)
-    : outputFileName(outputFileName), answerLog(""), lastVehListSize(0) {
+    : outputFileName(outputFileName), answerLog("") {
     answerLog.setf(std::ios::fixed , std::ios::floatfield); // use decimal format
     answerLog.setf(std::ios::showpoint); // print decimal point
     answerLog << std::setprecision(2);
@@ -161,8 +162,9 @@ NetsimTraciClient::run(std::string fileName, int port, std::string host) {
 bool
 NetsimTraciClient::run(int port, std::string host, const std::string& strBeginTime, const std::string& strEndTime) {
     std::stringstream msg;
-    SUMOTime currTime = string2time(strBeginTime)/1000, endTime = string2time(strEndTime)/1000;
-    std::cout << currTime << " " << endTime << std::endl;
+    SUMOTime currTimeInSec = string2time(strBeginTime)/1000;
+    SUMOTime endTimeInSec = string2time(strEndTime)/1000;
+    std::cout << currTimeInSec << " " << endTimeInSec << std::endl;
 
     // try to connect
     try {
@@ -174,59 +176,52 @@ NetsimTraciClient::run(int port, std::string host, const std::string& strBeginTi
         return false;
     }
 
+    // Subscribe command ID_LIST to list ids of all vehicles
+    // currently running within the scenario. This is one time
+    // subscription.
+    doSubscriptionIdList(currTimeInSec, endTimeInSec);
 
-    // Subscribe command to list ids of all vehicles currently running within the scenario
-    std::vector<int> idListVars;
-    idListVars.push_back(ID_LIST);
-    commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,"dummyObjId",
-            string2time(strBeginTime), string2time(strEndTime), idListVars);
-
-    // Advance simulation
-    commandSimulationStep(currTime);
-    currTime++;
-
-    // Add first vehicle to vehList global table
-    vehList.push_back("veh0");
-    lastVehListSize = vehList.size();
-
-    // Subscribe command VAR_SPEED and VAR_POSITION for first vehicle in the vehList
-    std::vector<int> getVehVars;
-    getVehVars.push_back(VAR_SPEED);
-    getVehVars.push_back(VAR_POSITION);
-    commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,
-                                   vehList.at(0), currTime,
-                                   endTime, getVehVars);
-
-    // Start simulation loop
-    for(; currTime <= endTime; currTime++)
+    // Main loop for driving SUMO simulation
+    for(; currTimeInSec <= endTimeInSec; currTimeInSec++)
         {
-        std::cout << "currTime " << currTime << std::endl;
-        // Subscribe command VAR_SPEED and VAR_POSITION for every new vehicle
-        if(lastVehListSize < vehList.size())
+        std::cout << "currTimeInSec " << currTimeInSec << std::endl;
+
+        clearActiveLists();
+
+        // Advance simulation
+        commandSimulationStep(currTimeInSec);
+
+        displayActiveLists();
+
+        // Subscribe command VAR_SPEED and VAR_POSITION for new vehicles
+        doSubscriptionSpeedAndPos(currTimeInSec, endTimeInSec);
+
+#if 0
+        // Check if new vehicles entered the simulation.
+        if(lastVehicleStateListSize < m_vehicleStateList.size())
             {
-            for(int i = lastVehListSize-1; i < vehList.size(); i++)
+            // True. Subscribe command VAR_SPEED and VAR_POSITION for every new vehicle
+            for(int i = lastVehicleStateListSize; i < vehList.size(); i++)
                 {
-                answerLog << "Veh added " << vehList.at(i) << std::endl;
+                answerLog << "Vehicle added " << vehList.at(i) << std::endl;
                 commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,
-                                               vehList.at(i), currTime,
-                                               endTime, getVehVars);
+                                               vehList.at(i), TIME2STEPS(currTimeInSec),
+                                               TIME2STEPS(endTimeInSec), getVehVars);
                 }
             }
         else
             {
-            answerLog << "No new Veh" << std::endl;
+            answerLog << "No new Vehicle added" << std::endl;
             }
 
-        // Advance simulation
-        commandSimulationStep(currTime);
-
         // Set vehList size;
-        lastVehListSize = vehList.size();
+        lastVehicleStateListSize = m_vehicleStateList.size();
+#endif
         }
 
     commandClose();
     close();
-    std::cout << answerLog.str() << std::endl;
+    writeResult();
     return true;
 }
 
@@ -342,7 +337,8 @@ NetsimTraciClient::commandSetValue(int domID, int varID, const std::string& objI
 //}
 
 void
-NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, const std::vector<int>& vars) {
+NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID,
+        int beginTime, int endTime, const std::vector<int>& vars) {
 
     send_commandSubscribeObjectVariable(domID, objID, beginTime, endTime, vars);
     answerLog << std::endl << "-> Command sent: <SubscribeVariable>:" << std::endl
@@ -440,16 +436,18 @@ NetsimTraciClient::validateSubscription(tcpip::Storage& inMsg) {
         int cmdId = inMsg.readUnsignedByte();
         if (cmdId >= RESPONSE_SUBSCRIBE_INDUCTIONLOOP_VARIABLE && cmdId <= RESPONSE_SUBSCRIBE_GUI_VARIABLE) {
             answerLog << "  CommandID=" << cmdId;
-            answerLog << "  ObjectID=" << inMsg.readString();
+            std::string objId = inMsg.readString();
+            answerLog << "  ObjectID=" << objId;
             unsigned int varNo = inMsg.readUnsignedByte();
             answerLog << "  #variables=" << varNo << std::endl;
             for (unsigned int i = 0; i < varNo; ++i) {
-                answerLog << "      VariableID=" << inMsg.readUnsignedByte();
+                int varId = inMsg.readUnsignedByte();
+                answerLog << "      VariableID=" << varId;
                 bool ok = inMsg.readUnsignedByte() == RTYPE_OK;
                 answerLog << "      ok=" << ok;
                 int valueDataType = inMsg.readUnsignedByte();
                 answerLog << " valueDataType=" << valueDataType;
-                readAndReportTypeDependent(inMsg, valueDataType);
+                readReportAndUpdateTypeDependent(cmdId, varId, objId, inMsg, valueDataType);
             }
         } else if (cmdId >= RESPONSE_SUBSCRIBE_INDUCTIONLOOP_CONTEXT && cmdId <= RESPONSE_SUBSCRIBE_GUI_CONTEXT) {
             answerLog << "  CommandID=" << cmdId;
@@ -607,7 +605,6 @@ NetsimTraciClient::setValueTypeDependant(tcpip::Storage& into, std::ifstream& de
     return 0;
 }
 
-
 void
 NetsimTraciClient::readAndReportTypeDependent(tcpip::Storage& inMsg, int valueDataType) {
     if (valueDataType == TYPE_UBYTE) {
@@ -723,4 +720,221 @@ NetsimTraciClient::readAndReportTypeDependent(tcpip::Storage& inMsg, int valueDa
     }
 }
 
+void
+NetsimTraciClient::readReportAndUpdateTypeDependent(int cmdId, int varId, std::string objId,
+        tcpip::Storage& inMsg, int valueDataType)
+    {
+    if (valueDataType == TYPE_UBYTE) {
+        int ubyte = inMsg.readUnsignedByte();
+        answerLog << " Unsigned Byte Value: " << ubyte << std::endl;
+    } else if (valueDataType == TYPE_BYTE) {
+        int byte = inMsg.readByte();
+        answerLog << " Byte value: " << byte << std::endl;
+    } else if (valueDataType == TYPE_INTEGER) {
+        int integer = inMsg.readInt();
+        answerLog << " Int value: " << integer << std::endl;
+    } else if (valueDataType == TYPE_FLOAT) {
+        float floatv = inMsg.readFloat();
+        if (floatv < 0.1 && floatv > 0) {
+            answerLog.setf(std::ios::scientific, std::ios::floatfield);
+        }
+        answerLog << " float value: " << floatv << std::endl;
+        answerLog.setf(std::ios::fixed , std::ios::floatfield); // use decimal format
+        answerLog.setf(std::ios::showpoint); // print decimal point
+        answerLog << std::setprecision(2);
+    } else if (valueDataType == TYPE_DOUBLE) {
+        double doublev = inMsg.readDouble();
+        answerLog << " Double value: " << doublev << std::endl;
 
+        // Check for cmdId and varId, then update the required table
+        if((cmdId == RESPONSE_SUBSCRIBE_VEHICLE_VARIABLE) &&
+                (varId == VAR_SPEED))
+            {
+            // After you receive speed, it is confirmed that the
+            // subscription was successful.
+            //m_subscribedVehicleList.push_back(objId);
+
+            // Update with proper speed value obtained from the message
+            m_vehicleStateList[objId] = doublev;
+            }
+
+    } else if (valueDataType == TYPE_BOUNDINGBOX) {
+        SUMOReal lowerLeftX = inMsg.readDouble();
+        SUMOReal lowerLeftY = inMsg.readDouble();
+        SUMOReal upperRightX = inMsg.readDouble();
+        SUMOReal upperRightY = inMsg.readDouble();
+        answerLog << " BoundaryBoxValue: lowerLeft x=" << lowerLeftX
+                  << " y=" << lowerLeftY << " upperRight x=" << upperRightX
+                  << " y=" << upperRightY << std::endl;
+    } else if (valueDataType == TYPE_POLYGON) {
+        int length = inMsg.readUnsignedByte();
+        answerLog << " PolygonValue: ";
+        for (int i = 0; i < length; i++) {
+            SUMOReal x = inMsg.readDouble();
+            SUMOReal y = inMsg.readDouble();
+            answerLog << "(" << x << "," << y << ") ";
+        }
+        answerLog << std::endl;
+    } else if (valueDataType == POSITION_3D) {
+        SUMOReal x = inMsg.readDouble();
+        SUMOReal y = inMsg.readDouble();
+        SUMOReal z = inMsg.readDouble();
+        answerLog << " Position3DValue: " << std::endl;
+        answerLog << " x: " << x << " y: " << y
+                  << " z: " << z << std::endl;
+    } else if (valueDataType == POSITION_ROADMAP) {
+        std::string roadId = inMsg.readString();
+        SUMOReal pos = inMsg.readDouble();
+        int laneId = inMsg.readUnsignedByte();
+        answerLog << " RoadMapPositionValue: roadId=" << roadId
+                  << " pos=" << pos
+                  << " laneId=" << laneId << std::endl;
+    } else if (valueDataType == TYPE_TLPHASELIST) {
+        int length = inMsg.readUnsignedByte();
+        answerLog << " TLPhaseListValue: length=" << length << std::endl;
+        for (int i = 0; i < length; i++) {
+            std::string pred = inMsg.readString();
+            std::string succ = inMsg.readString();
+            int phase = inMsg.readUnsignedByte();
+            answerLog << " precRoad=" << pred << " succRoad=" << succ
+                      << " phase=";
+            switch (phase) {
+                case TLPHASE_RED:
+                    answerLog << "red" << std::endl;
+                    break;
+                case TLPHASE_YELLOW:
+                    answerLog << "yellow" << std::endl;
+                    break;
+                case TLPHASE_GREEN:
+                    answerLog << "green" << std::endl;
+                    break;
+                default:
+                    answerLog << "#Error: unknown phase value" << (int)phase << std::endl;
+                    return;
+            }
+        }
+    } else if (valueDataType == TYPE_STRING) {
+        std::string s = inMsg.readString();
+        answerLog << " string value: " << s << std::endl;
+    } else if (valueDataType == TYPE_STRINGLIST) {
+        std::vector<std::string> s = inMsg.readStringList();
+        answerLog << " string list value: [ " << std::endl;
+        for (std::vector<std::string>::iterator i = s.begin(); i != s.end(); ++i) {
+            if (i != s.begin()) {
+                answerLog << ", ";
+            }
+            answerLog << '"' << *i << '"';
+        }
+        answerLog << " ]" << std::endl;
+
+#if 0
+        // Check for cmdId and varId, then update the required table
+        if((cmdId == RESPONSE_SUBSCRIBE_VEHICLE_VARIABLE) &&
+                (varId == ID_LIST))
+            {
+            // Search vehList for vehicles already present
+            for (std::vector<std::string>::iterator i = s.begin(); i != s.end(); ++i)
+                {
+                if(find(vehList.begin(), vehList.end(), *i) == vehList.end())
+                    {
+                    // Vehicle not found in vehList.
+                    vehList.push_back(*i);
+                    }
+                }
+            }
+#endif
+        if((cmdId == RESPONSE_SUBSCRIBE_VEHICLE_VARIABLE) &&
+                (varId == ID_LIST))
+            {
+            for (std::vector<std::string>::iterator i = s.begin(); i != s.end(); ++i)
+                {
+                // List of vehicles in simulation.
+                //m_vehicleStateList[*i] = 0.0;
+                m_vehicleList.push_back(*i);
+                }
+            }
+    } else if (valueDataType == TYPE_COMPOUND) {
+        int no = inMsg.readInt();
+        answerLog << " compound value with " << no << " members: [ " << std::endl;
+        for (int i = 0; i < no; ++i) {
+            int currentValueDataType = inMsg.readUnsignedByte();
+            answerLog << " valueDataType=" << currentValueDataType;
+            readAndReportTypeDependent(inMsg, currentValueDataType);
+        }
+        answerLog << " ]" << std::endl;
+    } else if (valueDataType == POSITION_2D) {
+        SUMOReal xv = inMsg.readDouble();
+        SUMOReal yv = inMsg.readDouble();
+        answerLog << " position value: (" << xv << "," << yv << ")" << std::endl;
+    } else if (valueDataType == TYPE_COLOR) {
+        int r = inMsg.readUnsignedByte();
+        int g = inMsg.readUnsignedByte();
+        int b = inMsg.readUnsignedByte();
+        int a = inMsg.readUnsignedByte();
+        answerLog << " color value: (" << r << "," << g << "," << b << "," << a << ")" << std::endl;
+    } else {
+        answerLog << "#Error: unknown valueDataType!" << std::endl;
+    }
+    }
+
+void NetsimTraciClient::doSubscriptionIdList(int currTimeInSec, int endTimeInSec)
+    {
+    std::vector<int> idListVars;
+    idListVars.push_back(ID_LIST);
+
+    // Send subscribe command ID_LIST
+    commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,"dummyObjId",
+            TIME2STEPS(currTimeInSec), TIME2STEPS(endTimeInSec), idListVars);
+    }
+
+void NetsimTraciClient::doSubscriptionSpeedAndPos(int currTimeInSec, int endTimeInSec)
+    {
+    std::vector<int> getVehVars;
+    getVehVars.push_back(VAR_SPEED);
+    getVehVars.push_back(VAR_POSITION);
+
+    // m_subscribedVehicleList contains all vehicles subscribed
+    // for command VAR_SPEED and VAR_POSITION. Check against this
+    // list to find out new subscriptions required.
+    for(std::vector<std::string>::iterator iter = m_vehicleList.begin();
+                    iter != m_vehicleList.end();iter++)
+        {
+        VehicleStateList::iterator vIter = m_vehicleStateList.find(*iter);
+        if (vIter == m_vehicleStateList.end())
+            {
+            // New vehicle added. Send subscribe command for this vehicle.
+            answerLog << std::endl << "Vehicle added " << *iter;
+            commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,
+                                           *iter,
+                                           TIME2STEPS(currTimeInSec),
+                                           TIME2STEPS(endTimeInSec),
+                                           getVehVars);
+            }
+         }
+    }
+
+void NetsimTraciClient::clearActiveLists()
+    {
+    m_vehicleList.clear();
+    m_vehicleStateList.erase(m_vehicleStateList.begin(), m_vehicleStateList.end());
+    }
+
+void NetsimTraciClient::displayActiveLists()
+    {
+    std::cout << std::endl;
+    std::cout << ">>>> m_vehicleList: <<<<" << std::endl;
+    for(std::vector<std::string>::iterator iter=m_vehicleList.begin();
+            iter != m_vehicleList.end();iter++)
+        {
+        std::cout << *iter << " ";
+        }
+    std::cout << std::endl;
+
+    std::cout << ">>>> m_vehicleStateList: <<<<" << std::endl;
+    for(VehicleStateList::iterator iter = m_vehicleStateList.begin();
+            iter != m_vehicleStateList.end();iter++)
+        {
+        std::cout << iter->first << ", " << iter->second << " ";
+        }
+    std::cout << std::endl;
+    }
