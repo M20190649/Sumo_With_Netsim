@@ -165,8 +165,9 @@ private:
     void readReportAndUpdateTypeDependent(int cmdId, int varId, std::string objId,
          tcpip::Storage& inMsg, int valueDataType);
 
-    void doSubscriptionIdList(int currTimeInSec, int endTimeInSec);
-    void doSubscriptionSpeedAndPos(int currTimeInSec, int endTimeInSec);
+    void commandSubscribeIdList(int currTimeInSec, int endTimeInSec);
+    void commandSubscribeSpeedAndPos(int currTimeInSec, int endTimeInSec);
+    void commandSetValueVST();
     void clearActiveLists();
     void displayActiveLists();
 

@@ -47,117 +47,9 @@ NetsimTraciClient::NetsimTraciClient(std::string outputFileName)
     answerLog << std::setprecision(2);
 }
 
-
 NetsimTraciClient::~NetsimTraciClient() {
     writeResult();
 }
-
-#if 0
-bool
-NetsimTraciClient::run(std::string fileName, int port, std::string host) {
-    std::ifstream defFile;
-    std::string fileContentStr;
-    std::stringstream fileContent;
-    std::string lineCommand;
-    std::stringstream msg;
-    int repNo = 1;
-    bool commentRead = false;
-
-    // try to connect
-    try {
-        TraCIAPI::connect(host, port);
-    } catch (tcpip::SocketException& e) {
-        std::stringstream msg;
-        msg << "#Error while connecting: " << e.what();
-        errorMsg(msg);
-        return false;
-    }
-
-    // read definition file and trigger commands according to it
-    defFile.open(fileName.c_str());
-    if (!defFile) {
-        msg << "Can not open definition file " << fileName << std::endl;
-        errorMsg(msg);
-        return false;
-    }
-    defFile.unsetf(std::ios::dec);
-
-    while (defFile >> lineCommand) {
-        repNo = 1;
-        if (lineCommand.compare("%") == 0) {
-            // a comment was read
-            commentRead = !commentRead;
-            continue;
-        }
-        if (commentRead) {
-            // wait until end of comment is reached
-            continue;
-        }
-        if (lineCommand.compare("repeat") == 0) {
-            defFile >> repNo;
-            defFile >> lineCommand;
-        }
-        if (lineCommand.compare("simstep2") == 0) {
-            // read parameter for command simulation step and trigger command
-            std::string time;
-            defFile >> time;
-            for (int i = 0; i < repNo; i++) {
-                commandSimulationStep(string2time(time));
-            }
-        } else if (lineCommand.compare("getvariable") == 0) {
-            // trigger command GetXXXVariable
-            int domID, varID;
-            std::string objID;
-            defFile >> domID >> varID >> objID;
-            commandGetVariable(domID, varID, objID);
-        } else if (lineCommand.compare("getvariable_plus") == 0) {
-            // trigger command GetXXXVariable with one parameter
-            int domID, varID;
-            std::string objID;
-            defFile >> domID >> varID >> objID;
-            std::stringstream msg;
-            tcpip::Storage tmp;
-            const int dataLength = setValueTypeDependant(tmp, defFile, msg);
-            std::string msgS = msg.str();
-            if (msgS != "") {
-                errorMsg(msg);
-            }
-            commandGetVariable(domID, varID, objID, &tmp);
-        } else if (lineCommand.compare("subscribevariable") == 0) {
-            // trigger command SubscribeXXXVariable
-            int domID, varNo;
-            std::string beginTime, endTime;
-            std::string objID;
-            defFile >> domID >> objID >> beginTime >> endTime >> varNo;
-            commandSubscribeObjectVariable(domID, objID, string2time(beginTime), string2time(endTime), varNo, defFile);
-        }  else if (lineCommand.compare("subscribecontext") == 0) {
-            // trigger command SubscribeXXXVariable
-            int domID, varNo, domain;
-            SUMOReal range;
-            std::string beginTime, endTime;
-            std::string objID;
-            defFile >> domID >> objID >> beginTime >> endTime >> domain >> range >> varNo;
-            commandSubscribeContextVariable(domID, objID, string2time(beginTime), string2time(endTime), domain, range, varNo, defFile);
-        }  else if (lineCommand.compare("setvalue") == 0) {
-            // trigger command SetXXXValue
-            int domID, varID;
-            std::string objID;
-            defFile >> domID >> varID >> objID;
-            commandSetValue(domID, varID, objID, defFile);
-        } else {
-            msg << "Error in definition file: " << lineCommand << " is not a valid command";
-            errorMsg(msg);
-            commandClose();
-            close();
-            return false;
-        }
-    }
-    defFile.close();
-    commandClose();
-    close();
-    return true;
-}
-#endif
 
 bool
 NetsimTraciClient::run(int port, std::string host, const std::string& strBeginTime, const std::string& strEndTime) {
@@ -179,7 +71,7 @@ NetsimTraciClient::run(int port, std::string host, const std::string& strBeginTi
     // Subscribe command ID_LIST to list ids of all vehicles
     // currently running within the scenario. This is one time
     // subscription.
-    doSubscriptionIdList(currTimeInSec, endTimeInSec);
+    commandSubscribeIdList(currTimeInSec, endTimeInSec);
 
     // Main loop for driving SUMO simulation
     for(; currTimeInSec <= endTimeInSec; currTimeInSec++)
@@ -193,30 +85,14 @@ NetsimTraciClient::run(int port, std::string host, const std::string& strBeginTi
 
         displayActiveLists();
 
-        // Subscribe command VAR_SPEED and VAR_POSITION for new vehicles
-        doSubscriptionSpeedAndPos(currTimeInSec, endTimeInSec);
+        // Subscribe command VAR_SPEED and VAR_POSITION for every
+        // new vehicle that entered the simulation
+        commandSubscribeSpeedAndPos(currTimeInSec, endTimeInSec);
 
-#if 0
-        // Check if new vehicles entered the simulation.
-        if(lastVehicleStateListSize < m_vehicleStateList.size())
-            {
-            // True. Subscribe command VAR_SPEED and VAR_POSITION for every new vehicle
-            for(int i = lastVehicleStateListSize; i < vehList.size(); i++)
-                {
-                answerLog << "Vehicle added " << vehList.at(i) << std::endl;
-                commandSubscribeObjectVariable(CMD_SUBSCRIBE_VEHICLE_VARIABLE,
-                                               vehList.at(i), TIME2STEPS(currTimeInSec),
-                                               TIME2STEPS(endTimeInSec), getVehVars);
-                }
-            }
-        else
-            {
-            answerLog << "No new Vehicle added" << std::endl;
-            }
+        // Update Ns3 Mobility Model
 
-        // Set vehList size;
-        lastVehicleStateListSize = m_vehicleStateList.size();
-#endif
+        // Send Vehicle state table to SUMO. This table is
+        // updated by Ns3 applications running on different nodes.
         }
 
     commandClose();
@@ -275,12 +151,13 @@ NetsimTraciClient::commandGetVariable(int domID, int varID, const std::string& o
     check_commandGetResult(inMsg, domID, -1, false);
     // report result state
     try {
+        int cmdID = (domID + 0x10);
         int variableID = inMsg.readUnsignedByte();
         std::string objectID = inMsg.readString();
-        answerLog <<  "  CommandID=" << (domID + 0x10) << "  VariableID=" << variableID << "  ObjectID=" << objectID;
+        answerLog <<  "  CommandID=" << cmdID << "  VariableID=" << variableID << "  ObjectID=" << objectID;
         int valueDataType = inMsg.readUnsignedByte();
         answerLog << " valueDataType=" << valueDataType;
-        readAndReportTypeDependent(inMsg, valueDataType);
+        readReportAndUpdateTypeDependent(cmdID, variableID, objectID, inMsg, valueDataType);
     } catch (tcpip::SocketException& e) {
         std::stringstream msg;
         msg << "Error while receiving command: " << e.what();
@@ -312,29 +189,27 @@ NetsimTraciClient::commandSetValue(int domID, int varID, const std::string& objI
     }
 }
 
-
-//void
-//NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID, int beginTime, int endTime, int varNo, std::ifstream& defFile) {
-//    std::vector<int> vars;
-//    for (int i = 0; i < varNo; ++i) {
-//        int var;
-//        defFile >> var;
-//        // variable id
-//        vars.push_back(var);
-//    }
-//    send_commandSubscribeObjectVariable(domID, objID, beginTime, endTime, vars);
-//    answerLog << std::endl << "-> Command sent: <SubscribeVariable>:" << std::endl
-//              << "  domID=" << domID << " objID=" << objID << " with " << varNo << " variables" << std::endl;
-//    tcpip::Storage inMsg;
-//    try {
-//        std::string acknowledgement;
-//        check_resultState(inMsg, domID, false, &acknowledgement);
-//        answerLog << acknowledgement << std::endl;
-//        validateSubscription(inMsg);
-//    } catch (tcpip::SocketException& e) {
-//        answerLog << e.what() << std::endl;
-//    }
-//}
+void
+NetsimTraciClient::commandSetValue(int domID, int varID, const std::string& objID, std::ifstream& defFile) {
+    std::stringstream msg;
+    tcpip::Storage inMsg, tmp;
+    int dataLength = setValueTypeDependant(tmp, defFile, msg);
+    std::string msgS = msg.str();
+    if (msgS != "") {
+        errorMsg(msg);
+    }
+    send_commandSetValue(domID, varID, objID, tmp);
+    answerLog << std::endl << "-> Command sent: <SetValue>:" << std::endl
+              << "  domID=" << domID << " varID=" << varID
+              << " objID=" << objID << std::endl;
+    try {
+        std::string acknowledgement;
+        check_resultState(inMsg, domID, false, &acknowledgement);
+        answerLog << acknowledgement << std::endl;
+    } catch (tcpip::SocketException& e) {
+        answerLog << e.what() << std::endl;
+    }
+}
 
 void
 NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID,
@@ -379,34 +254,6 @@ NetsimTraciClient::commandSubscribeContextVariable(int domID, const std::string&
         answerLog << e.what() << std::endl;
     }
 }
-
-
-// ---------- Report helper
-void
-NetsimTraciClient::writeResult() {
-    time_t seconds;
-    tm* locTime;
-    std::ofstream outFile(outputFileName.c_str());
-    if (!outFile) {
-        std::cerr << "Unable to write result file" << std::endl;
-    }
-    time(&seconds);
-    locTime = localtime(&seconds);
-    outFile << "NetsimTraciClient output file. Date: " << asctime(locTime) << std::endl;
-    outFile << answerLog.str();
-    outFile.close();
-}
-
-
-void
-NetsimTraciClient::errorMsg(std::stringstream& msg) {
-    std::cerr << msg.str() << std::endl;
-    answerLog << "----" << std::endl << msg.str() << std::endl;
-}
-
-
-
-
 
 
 bool
@@ -465,7 +312,9 @@ NetsimTraciClient::validateSubscription(tcpip::Storage& inMsg) {
                     answerLog << "      ok=" << ok;
                     int valueDataType = inMsg.readUnsignedByte();
                     answerLog << " valueDataType=" << valueDataType;
-                    readAndReportTypeDependent(inMsg, valueDataType);
+                    // Rudhir
+                    // Need to understand and fix the arguments
+                    // readReportAndUpdateTypeDependent(inMsg, valueDataType);
                 }
             }
         } else {
@@ -606,121 +455,6 @@ NetsimTraciClient::setValueTypeDependant(tcpip::Storage& into, std::ifstream& de
 }
 
 void
-NetsimTraciClient::readAndReportTypeDependent(tcpip::Storage& inMsg, int valueDataType) {
-    if (valueDataType == TYPE_UBYTE) {
-        int ubyte = inMsg.readUnsignedByte();
-        answerLog << " Unsigned Byte Value: " << ubyte << std::endl;
-    } else if (valueDataType == TYPE_BYTE) {
-        int byte = inMsg.readByte();
-        answerLog << " Byte value: " << byte << std::endl;
-    } else if (valueDataType == TYPE_INTEGER) {
-        int integer = inMsg.readInt();
-        answerLog << " Int value: " << integer << std::endl;
-    } else if (valueDataType == TYPE_FLOAT) {
-        float floatv = inMsg.readFloat();
-        if (floatv < 0.1 && floatv > 0) {
-            answerLog.setf(std::ios::scientific, std::ios::floatfield);
-        }
-        answerLog << " float value: " << floatv << std::endl;
-        answerLog.setf(std::ios::fixed , std::ios::floatfield); // use decimal format
-        answerLog.setf(std::ios::showpoint); // print decimal point
-        answerLog << std::setprecision(2);
-    } else if (valueDataType == TYPE_DOUBLE) {
-        double doublev = inMsg.readDouble();
-        answerLog << " Double value: " << doublev << std::endl;
-    } else if (valueDataType == TYPE_BOUNDINGBOX) {
-        SUMOReal lowerLeftX = inMsg.readDouble();
-        SUMOReal lowerLeftY = inMsg.readDouble();
-        SUMOReal upperRightX = inMsg.readDouble();
-        SUMOReal upperRightY = inMsg.readDouble();
-        answerLog << " BoundaryBoxValue: lowerLeft x=" << lowerLeftX
-                  << " y=" << lowerLeftY << " upperRight x=" << upperRightX
-                  << " y=" << upperRightY << std::endl;
-    } else if (valueDataType == TYPE_POLYGON) {
-        int length = inMsg.readUnsignedByte();
-        answerLog << " PolygonValue: ";
-        for (int i = 0; i < length; i++) {
-            SUMOReal x = inMsg.readDouble();
-            SUMOReal y = inMsg.readDouble();
-            answerLog << "(" << x << "," << y << ") ";
-        }
-        answerLog << std::endl;
-    } else if (valueDataType == POSITION_3D) {
-        SUMOReal x = inMsg.readDouble();
-        SUMOReal y = inMsg.readDouble();
-        SUMOReal z = inMsg.readDouble();
-        answerLog << " Position3DValue: " << std::endl;
-        answerLog << " x: " << x << " y: " << y
-                  << " z: " << z << std::endl;
-    } else if (valueDataType == POSITION_ROADMAP) {
-        std::string roadId = inMsg.readString();
-        SUMOReal pos = inMsg.readDouble();
-        int laneId = inMsg.readUnsignedByte();
-        answerLog << " RoadMapPositionValue: roadId=" << roadId
-                  << " pos=" << pos
-                  << " laneId=" << laneId << std::endl;
-    } else if (valueDataType == TYPE_TLPHASELIST) {
-        int length = inMsg.readUnsignedByte();
-        answerLog << " TLPhaseListValue: length=" << length << std::endl;
-        for (int i = 0; i < length; i++) {
-            std::string pred = inMsg.readString();
-            std::string succ = inMsg.readString();
-            int phase = inMsg.readUnsignedByte();
-            answerLog << " precRoad=" << pred << " succRoad=" << succ
-                      << " phase=";
-            switch (phase) {
-                case TLPHASE_RED:
-                    answerLog << "red" << std::endl;
-                    break;
-                case TLPHASE_YELLOW:
-                    answerLog << "yellow" << std::endl;
-                    break;
-                case TLPHASE_GREEN:
-                    answerLog << "green" << std::endl;
-                    break;
-                default:
-                    answerLog << "#Error: unknown phase value" << (int)phase << std::endl;
-                    return;
-            }
-        }
-    } else if (valueDataType == TYPE_STRING) {
-        std::string s = inMsg.readString();
-        answerLog << " string value: " << s << std::endl;
-    } else if (valueDataType == TYPE_STRINGLIST) {
-        std::vector<std::string> s = inMsg.readStringList();
-        answerLog << " string list value: [ " << std::endl;
-        for (std::vector<std::string>::iterator i = s.begin(); i != s.end(); ++i) {
-            if (i != s.begin()) {
-                answerLog << ", ";
-            }
-            answerLog << '"' << *i << '"';
-        }
-        answerLog << " ]" << std::endl;
-    } else if (valueDataType == TYPE_COMPOUND) {
-        int no = inMsg.readInt();
-        answerLog << " compound value with " << no << " members: [ " << std::endl;
-        for (int i = 0; i < no; ++i) {
-            int currentValueDataType = inMsg.readUnsignedByte();
-            answerLog << " valueDataType=" << currentValueDataType;
-            readAndReportTypeDependent(inMsg, currentValueDataType);
-        }
-        answerLog << " ]" << std::endl;
-    } else if (valueDataType == POSITION_2D) {
-        SUMOReal xv = inMsg.readDouble();
-        SUMOReal yv = inMsg.readDouble();
-        answerLog << " position value: (" << xv << "," << yv << ")" << std::endl;
-    } else if (valueDataType == TYPE_COLOR) {
-        int r = inMsg.readUnsignedByte();
-        int g = inMsg.readUnsignedByte();
-        int b = inMsg.readUnsignedByte();
-        int a = inMsg.readUnsignedByte();
-        answerLog << " color value: (" << r << "," << g << "," << b << "," << a << ")" << std::endl;
-    } else {
-        answerLog << "#Error: unknown valueDataType!" << std::endl;
-    }
-}
-
-void
 NetsimTraciClient::readReportAndUpdateTypeDependent(int cmdId, int varId, std::string objId,
         tcpip::Storage& inMsg, int valueDataType)
     {
@@ -827,22 +561,6 @@ NetsimTraciClient::readReportAndUpdateTypeDependent(int cmdId, int varId, std::s
         }
         answerLog << " ]" << std::endl;
 
-#if 0
-        // Check for cmdId and varId, then update the required table
-        if((cmdId == RESPONSE_SUBSCRIBE_VEHICLE_VARIABLE) &&
-                (varId == ID_LIST))
-            {
-            // Search vehList for vehicles already present
-            for (std::vector<std::string>::iterator i = s.begin(); i != s.end(); ++i)
-                {
-                if(find(vehList.begin(), vehList.end(), *i) == vehList.end())
-                    {
-                    // Vehicle not found in vehList.
-                    vehList.push_back(*i);
-                    }
-                }
-            }
-#endif
         if((cmdId == RESPONSE_SUBSCRIBE_VEHICLE_VARIABLE) &&
                 (varId == ID_LIST))
             {
@@ -859,7 +577,7 @@ NetsimTraciClient::readReportAndUpdateTypeDependent(int cmdId, int varId, std::s
         for (int i = 0; i < no; ++i) {
             int currentValueDataType = inMsg.readUnsignedByte();
             answerLog << " valueDataType=" << currentValueDataType;
-            readAndReportTypeDependent(inMsg, currentValueDataType);
+            readReportAndUpdateTypeDependent(cmdId, varId, objId, inMsg, currentValueDataType);
         }
         answerLog << " ]" << std::endl;
     } else if (valueDataType == POSITION_2D) {
@@ -877,7 +595,7 @@ NetsimTraciClient::readReportAndUpdateTypeDependent(int cmdId, int varId, std::s
     }
     }
 
-void NetsimTraciClient::doSubscriptionIdList(int currTimeInSec, int endTimeInSec)
+void NetsimTraciClient::commandSubscribeIdList(int currTimeInSec, int endTimeInSec)
     {
     std::vector<int> idListVars;
     idListVars.push_back(ID_LIST);
@@ -887,7 +605,7 @@ void NetsimTraciClient::doSubscriptionIdList(int currTimeInSec, int endTimeInSec
             TIME2STEPS(currTimeInSec), TIME2STEPS(endTimeInSec), idListVars);
     }
 
-void NetsimTraciClient::doSubscriptionSpeedAndPos(int currTimeInSec, int endTimeInSec)
+void NetsimTraciClient::commandSubscribeSpeedAndPos(int currTimeInSec, int endTimeInSec)
     {
     std::vector<int> getVehVars;
     getVehVars.push_back(VAR_SPEED);
@@ -938,3 +656,24 @@ void NetsimTraciClient::displayActiveLists()
         }
     std::cout << std::endl;
     }
+
+void
+NetsimTraciClient::writeResult() {
+    time_t seconds;
+    tm* locTime;
+    std::ofstream outFile(outputFileName.c_str());
+    if (!outFile) {
+        std::cerr << "Unable to write result file" << std::endl;
+    }
+    time(&seconds);
+    locTime = localtime(&seconds);
+    outFile << "NetsimTraciClient output file. Date: " << asctime(locTime) << std::endl;
+    outFile << answerLog.str();
+    outFile.close();
+}
+
+void
+NetsimTraciClient::errorMsg(std::stringstream& msg) {
+    std::cerr << msg.str() << std::endl;
+    answerLog << "----" << std::endl << msg.str() << std::endl;
+}
