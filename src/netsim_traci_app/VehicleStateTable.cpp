@@ -67,6 +67,7 @@ void VehicleStateTable::displayVehicleStateTable()
 
 void VehicleStateTable::testFill()
     {
+#if 0
     addValueVehicleState("veh1", {"veh0", 1.0});
     addValueVehicleState("veh1", {"veh2", 1.2});
 
@@ -83,5 +84,5 @@ void VehicleStateTable::testFill()
     addValueVehicleState("veh4", {"veh1", 4.1});
     addValueVehicleState("veh4", {"veh2", 4.2});
     addValueVehicleState("veh4", {"veh3", 4.3});
-
+#endif
     }

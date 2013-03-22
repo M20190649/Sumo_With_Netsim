@@ -190,28 +190,6 @@ NetsimTraciClient::commandSetValue(int domID, int varID, const std::string& objI
 }
 
 void
-NetsimTraciClient::commandSetValue(int domID, int varID, const std::string& objID, std::ifstream& defFile) {
-    std::stringstream msg;
-    tcpip::Storage inMsg, tmp;
-    int dataLength = setValueTypeDependant(tmp, defFile, msg);
-    std::string msgS = msg.str();
-    if (msgS != "") {
-        errorMsg(msg);
-    }
-    send_commandSetValue(domID, varID, objID, tmp);
-    answerLog << std::endl << "-> Command sent: <SetValue>:" << std::endl
-              << "  domID=" << domID << " varID=" << varID
-              << " objID=" << objID << std::endl;
-    try {
-        std::string acknowledgement;
-        check_resultState(inMsg, domID, false, &acknowledgement);
-        answerLog << acknowledgement << std::endl;
-    } catch (tcpip::SocketException& e) {
-        answerLog << e.what() << std::endl;
-    }
-}
-
-void
 NetsimTraciClient::commandSubscribeObjectVariable(int domID, const std::string& objID,
         int beginTime, int endTime, const std::vector<int>& vars) {
 
