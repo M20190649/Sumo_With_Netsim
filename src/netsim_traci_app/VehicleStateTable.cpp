@@ -10,12 +10,12 @@
 
 VehicleStateTable::VehicleStateTable()
     {
-    // TODO Auto-generated constructor stub
+    // For testing
+    testFillVSTable();
     }
 
 VehicleStateTable::~VehicleStateTable()
     {
-    // TODO Auto-generated destructor stub
     }
 
 void VehicleStateTable::initVehicleStateTable()
@@ -43,31 +43,92 @@ void VehicleStateTable::addValueVehicleState(std::string Id, VehicleState vState
         }
     }
 
+std::string VehicleStateTable::getReceiverVehicleIdAt(int index)
+    {
+    if(index > (m_VSTable.size()-1))
+        {
+        // Empty string
+        return "";
+        }
+
+    VSTable::iterator iter = m_VSTable.begin();
+    for(int i = 0; i < index; i++)
+        {
+        iter++;
+        }
+    return iter->first;
+    }
+
+std::vector<VehicleStateTable::VehicleState> VehicleStateTable::getSenderVehicleListAt(int index)
+    {
+    if(index > (m_VSTable.size()-1))
+        {
+        // Empty vector
+        return std::vector<VehicleStateTable::VehicleState>();
+        }
+
+    VSTable::iterator iter = m_VSTable.begin();
+    for(int i = 0; i < index; i++)
+        {
+        iter++;
+        }
+    return iter->second;
+    }
+
+int VehicleStateTable::getTableListCount()
+    {
+    int rowCnt = 0;
+    for(VSTable::iterator iter = m_VSTable.begin();iter != m_VSTable.end();iter++)
+        {
+        rowCnt++;
+        }
+    return rowCnt;
+    }
+
+int VehicleStateTable::getTableListItemCount()
+    {
+    int itemCnt = 0;
+    for(VSTable::iterator iter = m_VSTable.begin();iter != m_VSTable.end();iter++)
+        {
+        for(unsigned int i = 0; i < iter->second.size(); i++)
+            {
+            itemCnt++;
+            }
+        }
+    return itemCnt;
+    }
+
 void VehicleStateTable::displayVehicleStateTable()
     {
     bool empty = true;
+    int listCnt = getTableListCount();
+    int listItemCnt = getTableListItemCount();
 
-    for(VSTable::iterator iter = m_VSTable.begin();iter != m_VSTable.end();iter++)
+    std::cout << "List cnt: " << listCnt << " List Item cnt: " << listItemCnt << std::endl;
+    for(int i = 0; i < listCnt; i++)
         {
         empty = false;
-        std::cout << "Recv Id " << iter->first << ": ";
-        for(unsigned int i = 0; i < iter->second.size(); i++)
-            {
-            std::cout << "(" << iter->second.at(i).Id << ", "
-                    << iter->second.at(i).speed << ")" << " ";
-            }
+        std::cout << "Receiver ID: " << getReceiverVehicleIdAt(i)
+                    << ", Sender List: ";
+        displayVehicleList(getSenderVehicleListAt(i));
         std::cout << std::endl;
         }
-
     if(empty)
         {
         std::cout << "Table is empty" << std::endl;
         }
     }
 
-void VehicleStateTable::testFill()
+void VehicleStateTable::displayVehicleList(std::vector<VehicleStateTable::VehicleState> vList)
     {
-#if 0
+    for(unsigned int i = 0; i < vList.size(); i++)
+        {
+        std::cout << vList.at(i).Id << "," << vList.at(i).speed << " ";
+        }
+    }
+
+void VehicleStateTable::testFillVSTable()
+    {
     addValueVehicleState("veh1", {"veh0", 1.0});
     addValueVehicleState("veh1", {"veh2", 1.2});
 
@@ -78,11 +139,9 @@ void VehicleStateTable::testFill()
     addValueVehicleState("veh3", {"veh2", 3.2});
     addValueVehicleState("veh3", {"veh4", 3.4});
 
-    addValueVehicleState("veh2", {"veh1", 2.1});
     addValueVehicleState("veh2", {"veh3", 2.3});
 
     addValueVehicleState("veh4", {"veh1", 4.1});
     addValueVehicleState("veh4", {"veh2", 4.2});
     addValueVehicleState("veh4", {"veh3", 4.3});
-#endif
     }

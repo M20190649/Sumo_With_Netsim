@@ -253,6 +253,10 @@
 // response: subscribe GUI variable
 #define RESPONSE_SUBSCRIBE_GUI_VARIABLE 0xec
 
+#ifdef SUMO_WITH_NETSIM
+// command: change vehicle state table
+#define CMD_SET_VEHICLE_STATE_TABLE 0xcd
+#endif
 
 // ****************************************
 // POSITION REPRESENTATIONS

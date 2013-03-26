@@ -25,6 +25,7 @@
 #include "TraCIConstants.h"
 #include "SUMOTime.h"
 #include "NetsimTraciClient.h"
+#include "VehicleStateTable.h"
 
 #ifdef CHECK_MEMORY_LEAKS
 #include <foreign/nvwa/debug_new.h>
@@ -40,8 +41,12 @@ using namespace netsimtraciclient;
 // ===========================================================================
 // method definitions
 // ===========================================================================
-NetsimTraciClient::NetsimTraciClient(std::string outputFileName)
-    : outputFileName(outputFileName), answerLog("") {
+NetsimTraciClient::NetsimTraciClient(VehicleStateTable* ptrVehStateTble,
+                                    std::string outputFileName)
+    : m_ptrVehStateTbl(ptrVehStateTble),
+      outputFileName(outputFileName),
+      answerLog("") {
+
     answerLog.setf(std::ios::fixed , std::ios::floatfield); // use decimal format
     answerLog.setf(std::ios::showpoint); // print decimal point
     answerLog << std::setprecision(2);
@@ -93,6 +98,7 @@ NetsimTraciClient::run(int port, std::string host, const std::string& strBeginTi
 
         // Send Vehicle state table to SUMO. This table is
         // updated by Ns3 applications running on different nodes.
+        commandSetValueVehicleStateTable();
         }
 
     commandClose();
@@ -183,6 +189,60 @@ NetsimTraciClient::commandSetValue(int domID, int varID, const std::string& objI
     try {
         std::string acknowledgement;
         check_resultState(inMsg, domID, false, &acknowledgement);
+        answerLog << acknowledgement << std::endl;
+    } catch (tcpip::SocketException& e) {
+        answerLog << e.what() << std::endl;
+    }
+}
+
+void NetsimTraciClient::commandSetValueVehicleStateTable() {
+    tcpip::Storage tmp, inMsg;
+    int cmdId = CMD_SET_VEHICLE_STATE_TABLE;
+    int varId = VAR_SPEED;
+    std::string objId = "VST0";
+
+    int listCnt = m_ptrVehStateTbl->getTableListCount();
+    int itemNumber = listCnt + m_ptrVehStateTbl->getTableListItemCount();
+    std::cout << "listCnt: " << listCnt << " itemNumber: " << itemNumber << std::endl;
+
+    tmp.writeUnsignedByte(TYPE_COMPOUND);
+    tmp.writeInt(itemNumber);
+    int length = 1 + 4;
+
+    for (int i = 0; i < listCnt; ++i)
+        {
+        std::string vehId = m_ptrVehStateTbl->getReceiverVehicleIdAt(i);
+
+        tmp.writeUnsignedByte(TYPE_STRING);
+        tmp.writeString(vehId);
+        length += 1 + 4 + vehId.length();
+
+        std::vector<VehicleStateTable::VehicleState> listItem =
+                m_ptrVehStateTbl->getSenderVehicleListAt(i);
+        for(int j = 0; j < listItem.size(); j++)
+            {
+            tmp.writeUnsignedByte(TYPE_COMPOUND);
+            tmp.writeInt(2);
+            length += 1 + 4;
+
+            tmp.writeUnsignedByte(TYPE_STRING);
+            tmp.writeString(listItem.at(j).Id);
+            length += 1 + 4 + vehId.length();
+
+            tmp.writeUnsignedByte(TYPE_DOUBLE);
+            tmp.writeDouble(listItem.at(j).speed);
+            length += 1 + 8;
+            }
+        }
+
+    send_commandSetValue(cmdId, varId, objId, tmp);
+
+    answerLog << std::endl << "-> Command sent: <SetValue>:" << std::endl
+              << "  domID=" << cmdId << " varID=" << varId
+              << " objID=" << objId << std::endl;
+    try {
+        std::string acknowledgement;
+        check_resultState(inMsg, cmdId, false, &acknowledgement);
         answerLog << acknowledgement << std::endl;
     } catch (tcpip::SocketException& e) {
         answerLog << e.what() << std::endl;
@@ -467,7 +527,7 @@ NetsimTraciClient::readReportAndUpdateTypeDependent(int cmdId, int varId, std::s
             //m_subscribedVehicleList.push_back(objId);
 
             // Update with proper speed value obtained from the message
-            m_vehicleStateList[objId] = doublev;
+            m_vehicleSpeedList[objId] = doublev;
             }
 
     } else if (valueDataType == TYPE_BOUNDINGBOX) {
@@ -545,7 +605,7 @@ NetsimTraciClient::readReportAndUpdateTypeDependent(int cmdId, int varId, std::s
             for (std::vector<std::string>::iterator i = s.begin(); i != s.end(); ++i)
                 {
                 // List of vehicles in simulation.
-                //m_vehicleStateList[*i] = 0.0;
+                //m_vehicleSpeedList[*i] = 0.0;
                 m_vehicleList.push_back(*i);
                 }
             }
@@ -589,14 +649,14 @@ void NetsimTraciClient::commandSubscribeSpeedAndPos(int currTimeInSec, int endTi
     getVehVars.push_back(VAR_SPEED);
     getVehVars.push_back(VAR_POSITION);
 
-    // m_subscribedVehicleList contains all vehicles subscribed
+    // m_vehicleSpeedList contains all vehicles subscribed
     // for command VAR_SPEED and VAR_POSITION. Check against this
     // list to find out new subscriptions required.
     for(std::vector<std::string>::iterator iter = m_vehicleList.begin();
                     iter != m_vehicleList.end();iter++)
         {
-        VehicleStateList::iterator vIter = m_vehicleStateList.find(*iter);
-        if (vIter == m_vehicleStateList.end())
+        VehicleSpeedList::iterator vIter = m_vehicleSpeedList.find(*iter);
+        if (vIter == m_vehicleSpeedList.end())
             {
             // New vehicle added. Send subscribe command for this vehicle.
             answerLog << std::endl << "Vehicle added " << *iter;
@@ -612,7 +672,7 @@ void NetsimTraciClient::commandSubscribeSpeedAndPos(int currTimeInSec, int endTi
 void NetsimTraciClient::clearActiveLists()
     {
     m_vehicleList.clear();
-    m_vehicleStateList.erase(m_vehicleStateList.begin(), m_vehicleStateList.end());
+    m_vehicleSpeedList.erase(m_vehicleSpeedList.begin(), m_vehicleSpeedList.end());
     }
 
 void NetsimTraciClient::displayActiveLists()
@@ -626,17 +686,16 @@ void NetsimTraciClient::displayActiveLists()
         }
     std::cout << std::endl;
 
-    std::cout << ">>>> m_vehicleStateList: <<<<" << std::endl;
-    for(VehicleStateList::iterator iter = m_vehicleStateList.begin();
-            iter != m_vehicleStateList.end();iter++)
+    std::cout << ">>>> m_vehicleSpeedList: <<<<" << std::endl;
+    for(VehicleSpeedList::iterator iter = m_vehicleSpeedList.begin();
+            iter != m_vehicleSpeedList.end();iter++)
         {
         std::cout << iter->first << ", " << iter->second << " ";
         }
     std::cout << std::endl;
     }
 
-void
-NetsimTraciClient::writeResult() {
+void NetsimTraciClient::writeResult() {
     time_t seconds;
     tm* locTime;
     std::ofstream outFile(outputFileName.c_str());
@@ -650,8 +709,7 @@ NetsimTraciClient::writeResult() {
     outFile.close();
 }
 
-void
-NetsimTraciClient::errorMsg(std::stringstream& msg) {
+void NetsimTraciClient::errorMsg(std::stringstream& msg) {
     std::cerr << msg.str() << std::endl;
     answerLog << "----" << std::endl << msg.str() << std::endl;
 }

@@ -430,6 +430,11 @@ TraCIServer::dispatchCommand() {
             case CMD_SUBSCRIBE_GUI_CONTEXT:
                 success = addObjectContextSubscription(commandId);
                 break;
+#ifdef SUMO_WITH_NETSIM
+            case CMD_SET_VEHICLE_STATE_TABLE:
+                writeStatusCmd(commandId, RTYPE_OK, "VSTable Updated");
+                break;
+#endif
             default:
                 writeStatusCmd(commandId, RTYPE_NOTIMPLEMENTED, "Command not implemented in sumo");
         }

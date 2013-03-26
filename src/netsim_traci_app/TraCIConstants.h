@@ -253,6 +253,9 @@
 // response: subscribe GUI variable
 #define RESPONSE_SUBSCRIBE_GUI_VARIABLE 0xec
 
+// command: change vehicle state table
+#define CMD_SET_VEHICLE_STATE_TABLE 0xcd
+
 
 // ****************************************
 // POSITION REPRESENTATIONS

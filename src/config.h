@@ -25,9 +25,6 @@
 /* Define if compiling under cygwin */
 /* #undef HAVE_CYGWIN */
 
-/* Define to 1 if you have the <dlfcn.h> header file. */
-#define HAVE_DLFCN_H 1
-
 /* Define to 1 if you have the <float.h> header file. */
 #define HAVE_FLOAT_H 1
 
@@ -139,7 +136,7 @@
 #define HAVE_UNISTD_H 1
 
 /* Define if auto-generated version.h should be used. */
-#define HAVE_VERSION_H 1
+/* #undef HAVE_VERSION_H */
 
 /* Define to 1 if you have the <wchar.h> header file. */
 #define HAVE_WCHAR_H 1
@@ -150,10 +147,6 @@
 /* Define to 1 if `lstat' dereferences a symlink specified with a trailing
    slash. */
 #define LSTAT_FOLLOWS_SLASHED_SYMLINK 1
-
-/* Define to the sub-directory in which libtool stores uninstalled libraries.
-   */
-#define LT_OBJDIR ".libs/"
 
 /* Including windows.h gives errors otherwise (cygwin) */
 /* #undef NOMINMAX */
@@ -227,7 +220,7 @@
 #define VERSION "0.16.0"
 
 /* Defined if auto-generated version.h is unavailable. */
-/* #undef VERSION_STRING */
+#define VERSION_STRING "0.16.0"
 
 /* Xerces and Fox expect this to be defined (cygwin) */
 /* #undef WIN32 */
@@ -259,3 +252,7 @@
 /* Define to empty if the keyword `volatile' does not work. Warning: valid
    code using `volatile' can become incorrect without. Disable with care. */
 /* #undef volatile */
+
+/* Enable changes to integrate SUMO with external network simulator
+ * framework; NS3 in this case. */
+#define SUMO_WITH_NETSIM 1

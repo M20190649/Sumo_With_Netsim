@@ -109,11 +109,14 @@ TraCIAPI::send_commandGetVariable(int domID, int varID, const std::string& objID
     }
     tcpip::Storage outMsg;
     // command length
-    unsigned int length = 1 + 1 + 1 + 4 + (int) objID.length();
+    //unsigned int length = 1 + 1 + 1 + 4 + (int) objID.length();
+    unsigned int length = 5 + 1 + 1 + 4 + (int) objID.length();
     if (add != 0) {
         length += (int)add->size();
     }
-    outMsg.writeUnsignedByte(length);
+    //outMsg.writeUnsignedByte(length);
+    outMsg.writeUnsignedByte(0);
+    outMsg.writeInt(length);
     // command id
     outMsg.writeUnsignedByte(domID);
     // variable id
@@ -136,7 +139,9 @@ TraCIAPI::send_commandSetValue(int domID, int varID, const std::string& objID, t
     }
     tcpip::Storage outMsg;
     // command length (domID, varID, objID, dataType, data)
-    outMsg.writeUnsignedByte(1 + 1 + 1 + 4 + (int) objID.length() + (int)content.size());
+    //outMsg.writeUnsignedByte(1 + 1 + 1 + 4 + (int) objID.length() + (int)content.size());
+    outMsg.writeUnsignedByte(0);
+    outMsg.writeInt(5 + 1 + 1 + 4 + (int) objID.length() + (int)content.size());
     // command id
     outMsg.writeUnsignedByte(domID);
     // variable id

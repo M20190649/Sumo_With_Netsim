@@ -26,8 +26,14 @@ class VehicleStateTable
          double speed;
          }VehicleState;
     void addValueVehicleState(std::string Id, VehicleState vState);
+    std::string getReceiverVehicleIdAt(int index);
+    std::vector<VehicleState> getSenderVehicleListAt(int index);
+    int getTableListCount();
+    int getTableListItemCount();
+
+    void displayVehicleList(std::vector<VehicleStateTable::VehicleState> vList);
     void displayVehicleStateTable();
-    void testFill();
+    void testFillVSTable();
 
     private:
     typedef std::map<std::string, std::vector<VehicleState> > VSTable;
