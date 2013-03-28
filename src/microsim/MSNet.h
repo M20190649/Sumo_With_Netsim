@@ -57,6 +57,10 @@
 #include <utils/common/DijkstraRouterEffort.h>
 #include <utils/common/AStarRouter.h>
 
+#ifdef SUMO_WITH_NETSIM
+#include "MSVehicleStateTable.h"
+#endif
+
 // ===========================================================================
 // class declarations
 // ===========================================================================
@@ -536,6 +540,15 @@ public:
                           SUMOReal step);
 #endif
 
+#ifdef SUMO_WITH_NETSIM
+    void initVehicleStateTable();
+    void clearVehicleStateTable();
+    void addValueVehicleState(std::string receiverId,
+                                std::string senderId,
+                                double senderSpeed);
+    void displayVehicleStateTable();
+#endif
+
 protected:
     /// @brief Unique instance of MSNet
     static MSNet* myInstance;
@@ -638,6 +651,12 @@ protected:
     mutable AStarRouterTT_ByProxi<MSEdge, SUMOVehicle, prohibited_withRestrictions<MSEdge, SUMOVehicle> >* myRouterTTAStar;
     mutable DijkstraRouterEffort_ByProxi<MSEdge, SUMOVehicle, prohibited_withRestrictions<MSEdge, SUMOVehicle> >* myRouterEffort;
 
+#ifdef SUMO_WITH_NETSIM
+    /* @brief Table for storing vehicle speeds of neighbors. All vehicles whose
+     * broadcast are successfully received are considered as neighbors.
+     */
+    MSVehicleStateTable* myVSTable;
+#endif
 
 private:
     /// @brief Invalidated copy constructor.

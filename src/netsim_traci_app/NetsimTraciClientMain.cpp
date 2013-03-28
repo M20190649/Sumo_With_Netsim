@@ -16,7 +16,7 @@
 #include <cstdlib>
 #include <vector>
 #include "NetsimTraciClient.h"
-#include "VehicleStateTable.h"
+#include "MSVehicleStateTable.h"
 
 
 
@@ -83,7 +83,7 @@ int main(int argc, char* argv[]) {
     ///////////////////////////////////////////
     // Start TraCI Sumo Client
     ///////////////////////////////////////////
-    VehicleStateTable* ptrVehStateTable = new VehicleStateTable();
+    MSVehicleStateTable* ptrVehStateTable = new MSVehicleStateTable();
     NetsimTraciClient client(ptrVehStateTable, outFileName);
     return !client.run(port, host, strBeginTime, strEndTime);
 

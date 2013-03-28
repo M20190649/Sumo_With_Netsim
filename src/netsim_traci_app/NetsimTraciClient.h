@@ -13,7 +13,7 @@
 #include "socket.h"
 #include "SUMOTime.h"
 #include "TraCIAPI.h"
-#include "VehicleStateTable.h"
+#include "MSVehicleStateTable.h"
 
 
 namespace netsimtraciclient {
@@ -32,7 +32,7 @@ public:
     /** @brief Constructor
      * @param[in] outputFileName The name of the file the outputs will be written into
      */
-    NetsimTraciClient(VehicleStateTable* ptrVehStateTble,
+    NetsimTraciClient(MSVehicleStateTable* ptrVehStateTble,
                     std::string outputFileName = "testclient_result.out");
 
     /// @brief Destructor
@@ -182,7 +182,7 @@ private:
     /// @brief Stream containing the log
     std::stringstream answerLog;
 
-    VehicleStateTable* m_ptrVehStateTbl;
+    MSVehicleStateTable* m_ptrVehStateTbl;
 
     /// @brief This list contains all vehicles subscribed for command VAR_SPEED and VAR_POSITION.
     typedef std::map<std::string, double > VehicleSpeedList;

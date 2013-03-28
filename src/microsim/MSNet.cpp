@@ -194,6 +194,11 @@ MSNet::MSNet(MSVehicleControl* vc, MSEventControl* beginOfTimestepEvents,
         MSGlobals::gMesoNet = new MELoop(string2time(oc.getString("meso-recheck")));
     }
 #endif
+
+#ifdef SUMO_WITH_NETSIM
+    myVSTable = new MSVehicleStateTable();
+#endif
+
     myInstance = this;
 }
 
@@ -795,6 +800,32 @@ MSNet::createMsgEmitter(std::string& id,
 }
 #endif
 
+#ifdef SUMO_WITH_NETSIM
+    void MSNet::initVehicleStateTable()
+        {
+        myVSTable->initVehicleStateTable();
+        }
+
+    void MSNet::clearVehicleStateTable()
+        {
+        myVSTable->clearVehicleStateTable();
+        }
+
+    void MSNet::addValueVehicleState(std::string receiverId,
+                                    std::string senderId,
+                                    double senderSpeed)
+        {
+        MSVehicleStateTable::VehicleState vs;
+        vs.Id = senderId;
+        vs.speed = senderSpeed;
+        myVSTable->addValueVehicleState(receiverId, vs);
+        }
+
+    void MSNet::displayVehicleStateTable()
+        {
+        myVSTable->displayVehicleStateTable();
+        }
+#endif
 
 /****************************************************************************/
 

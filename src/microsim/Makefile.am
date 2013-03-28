@@ -27,6 +27,7 @@ MSVehicleContainer.cpp MSVehicleContainer.h \
 MSVehicleControl.cpp MSVehicleControl.h \
 MSVehicleTransfer.cpp MSVehicleTransfer.h \
 MSCFModel.cpp MSCFModel.h \
-MSVehicleType.cpp MSVehicleType.h 
+MSVehicleType.cpp MSVehicleType.h \
+MSVehicleStateTable.cpp MSVehicleStateTable.h
 
 SUBDIRS = actions cfmodels devices logging output traffic_lights trigger

@@ -128,7 +128,6 @@ public:
 
     void collectObjectsInRange(int domain, const PositionVector& shape, SUMOReal range, std::set<std::string>& into);
 
-
 private:
     /** @brief Constructor
      * @param[in] port The port to listen to (to open)
@@ -173,6 +172,9 @@ private:
 
     int dispatchCommand();
 
+#ifdef SUMO_WITH_NETSIM
+    bool commandSetValueVehicleStateTable();
+#endif
 
 private:
     /// @brief Singleton instance of the server

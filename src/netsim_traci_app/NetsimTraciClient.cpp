@@ -25,7 +25,7 @@
 #include "TraCIConstants.h"
 #include "SUMOTime.h"
 #include "NetsimTraciClient.h"
-#include "VehicleStateTable.h"
+#include "MSVehicleStateTable.h"
 
 #ifdef CHECK_MEMORY_LEAKS
 #include <foreign/nvwa/debug_new.h>
@@ -41,7 +41,7 @@ using namespace netsimtraciclient;
 // ===========================================================================
 // method definitions
 // ===========================================================================
-NetsimTraciClient::NetsimTraciClient(VehicleStateTable* ptrVehStateTble,
+NetsimTraciClient::NetsimTraciClient(MSVehicleStateTable* ptrVehStateTble,
                                     std::string outputFileName)
     : m_ptrVehStateTbl(ptrVehStateTble),
       outputFileName(outputFileName),
@@ -50,6 +50,9 @@ NetsimTraciClient::NetsimTraciClient(VehicleStateTable* ptrVehStateTble,
     answerLog.setf(std::ios::fixed , std::ios::floatfield); // use decimal format
     answerLog.setf(std::ios::showpoint); // print decimal point
     answerLog << std::setprecision(2);
+
+    // Only for testing
+    m_ptrVehStateTbl->testFillVSTable();
 }
 
 NetsimTraciClient::~NetsimTraciClient() {
@@ -217,7 +220,7 @@ void NetsimTraciClient::commandSetValueVehicleStateTable() {
         tmp.writeString(vehId);
         length += 1 + 4 + vehId.length();
 
-        std::vector<VehicleStateTable::VehicleState> listItem =
+        std::vector<MSVehicleStateTable::VehicleState> listItem =
                 m_ptrVehStateTbl->getSenderVehicleListAt(i);
         for(int j = 0; j < listItem.size(); j++)
             {
