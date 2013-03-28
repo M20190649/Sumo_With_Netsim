@@ -258,3 +258,7 @@
 /* Define to empty if the keyword `volatile' does not work. Warning: valid
    code using `volatile' can become incorrect without. Disable with care. */
 #undef volatile
+
+/* Enable changes to integrate SUMO with external network simulator
+ * framework; NS3 in this case. */
+#define SUMO_WITH_NETSIM 1
