@@ -45,6 +45,7 @@
 #include <vector>
 #include "MSVehicleType.h"
 #include "MSBaseVehicle.h"
+#include "MSVehicleStateTable.h"
 
 
 // ===========================================================================
@@ -747,6 +748,10 @@ public:
     }
     /// @}
 
+#ifdef SUMO_WITH_NETSIM
+std::pair<MSVehicleStateTable::VehicleState, SUMOReal>
+    getLeaderInfo(MSVehicle* pred);
+#endif
 
 
 

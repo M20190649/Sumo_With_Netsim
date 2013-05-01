@@ -24,6 +24,8 @@ class MSVehicleStateTable
          {
          std::string Id;
          double speed;
+         double pos_x;
+         double pos_y;
          }VehicleState;
     void addValueVehicleState(std::string Id, VehicleState& vState);
     std::string getReceiverVehicleIdAt(int index);

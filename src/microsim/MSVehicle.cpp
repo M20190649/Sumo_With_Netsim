@@ -95,6 +95,8 @@
 
 #define BUS_STOP_OFFSET 0.5
 
+#define RUDHIR_DEBUG std::cout
+
 
 // ===========================================================================
 // static value definitions
@@ -635,6 +637,20 @@ MSVehicle::processNextStop(SUMOReal currentVelocity) {
     return currentVelocity;
 }
 
+#ifdef SUMO_WITH_NETSIM
+std::pair<MSVehicleStateTable::VehicleState, SUMOReal>
+    MSVehicle::getLeaderInfo(MSVehicle* pred)
+    {
+    MSVehicleStateTable::VehicleState predState =
+            MSNet::getInstance()->getSenderVehicleState(this->getID(), pred->getID());
+    if(predState.Id != "null")
+        {
+        return std::pair<MSVehicleStateTable::VehicleState, SUMOReal>(predState, gap2pred(*pred));
+        }
+
+    return std::pair<MSVehicleStateTable::VehicleState, SUMOReal>(predState, 0.0);
+    }
+#endif
 
 void
 MSVehicle::move(SUMOTime t, MSLane* lane, MSVehicle* pred, MSVehicle* neigh, SUMOReal lengthsInFront) {
@@ -702,18 +718,30 @@ MSVehicle::move(SUMOTime t, MSLane* lane, MSVehicle* pred, MSVehicle* neigh, SUM
             }
         }
         if (leaderInfo.first != 0) {
-            SUMOReal vsafeLeader = 0;
-            if (leaderInfo.second >= 0) {
-                vsafeLeader = cfModel.followSpeed(this, getSpeed(), leaderInfo.second, leaderInfo.first->getSpeed(), leaderInfo.first->getCarFollowModel().getMaxDecel());
-            } else {
-                // the leading, in-lapping vehicle is occupying the complete next lane
-                // stop before entering this lane
-                vsafeLeader = cfModel.stopSpeed(this, seen - lane->getLength() - POSITION_EPS);
-            }
-            if (lastLink > 0) {
-                myLFLinkLanes[lastLink].adaptLeaveSpeed(vsafeLeader);
-            }
-            v = MIN2(v, vsafeLeader);
+#ifdef SUMO_WITH_NETSIM
+            // Check whether the leader has sent any broadcast.
+            // Calculate followSpeed only if there is a broadcast.
+            MSVehicleStateTable::VehicleState predState =
+            MSNet::getInstance()->getSenderVehicleState(this->getID(),
+                                                        leaderInfo.first->getID());
+            if(predState.Id != "null")
+                {
+#endif
+                SUMOReal vsafeLeader = 0;
+                if (leaderInfo.second >= 0) {
+                    vsafeLeader = cfModel.followSpeed(this, getSpeed(), leaderInfo.second, leaderInfo.first->getSpeed(), leaderInfo.first->getCarFollowModel().getMaxDecel());
+                } else {
+                    // the leading, in-lapping vehicle is occupying the complete next lane
+                    // stop before entering this lane
+                    vsafeLeader = cfModel.stopSpeed(this, seen - lane->getLength() - POSITION_EPS);
+                }
+                if (lastLink > 0) {
+                    myLFLinkLanes[lastLink].adaptLeaveSpeed(vsafeLeader);
+                }
+                v = MIN2(v, vsafeLeader);
+#ifdef SUMO_WITH_NETSIM
+                }
+#endif
         }
 
         // process stops
@@ -727,6 +755,9 @@ MSVehicle::move(SUMOTime t, MSLane* lane, MSVehicle* pred, MSVehicle* neigh, SUM
             }
             v = MIN2(v, stopSpeed);
             myLFLinkLanes.push_back(DriveProcessItem(0, v, v, false, 0, 0, stopDist));
+
+            // Rudhir
+            //std::cout<<"stops:"<<std::endl;
             break;
         }
 
@@ -745,6 +776,9 @@ MSVehicle::move(SUMOTime t, MSLane* lane, MSVehicle* pred, MSVehicle* neigh, SUM
                 myLFLinkLanes[lastLink].adaptLeaveSpeed(va);
             }
             myLFLinkLanes.push_back(DriveProcessItem(0, v, v, false, 0, 0, seen));
+
+            // Rudhir
+            //std::cout<<"routeEnds:"<<std::endl;
             break;
         }
         // check whether the lane is a dead end
@@ -757,6 +791,8 @@ MSVehicle::move(SUMOTime t, MSLane* lane, MSVehicle* pred, MSVehicle* neigh, SUM
                 v = MIN2(va, v);
             }
             myLFLinkLanes.push_back(DriveProcessItem(0, v, v, false, 0, 0, seen));
+            // Rudhir
+            //std::cout<<"deadend:"<<std::endl;
             break;
         }
 
@@ -768,6 +804,8 @@ MSVehicle::move(SUMOTime t, MSLane* lane, MSVehicle* pred, MSVehicle* neigh, SUM
         if ((yellow || red) && seen > cfModel.brakeGap(myState.mySpeed) - myState.mySpeed * cfModel.getHeadwayTime()) {
             // the vehicle is able to brake in front of a yellow/red traffic light
             myLFLinkLanes.push_back(DriveProcessItem(*link, vLinkWait, vLinkWait, false, t + TIME2STEPS(seen / vLinkPass), vLinkPass, stopDist));
+            // Rudhir
+            //std::cout<<"tlight:"<<std::endl;
             break;
         }
         SUMOReal va = firstLane ? v : lane->getVehicleMaxSpeed(this);
@@ -792,10 +830,21 @@ MSVehicle::move(SUMOTime t, MSLane* lane, MSVehicle* pred, MSVehicle* neigh, SUM
         SUMOReal leaveSpeed = MIN2(lane->getVehicleMaxSpeed(this), (SUMOReal)sqrt(v1));
         myLFLinkLanes[lastLink].adaptLeaveSpeed(leaveSpeed);
 
+        // Rudhir Debug
+        //std::cout<<vLinkPass<<":"<<vLinkWait<<":"<<t + TIME2STEPS(seen / vLinkPass)<<":"
+                //<<stopDist<<":via lane "<<lane->getID()<<":"<<std::endl;
+        // Rudhir Debug
+        //std::cout<<getID()<<":"<<!setRequest<<":"<<(vLinkPass <= 0 || seen > dist)<<":"<<hadNonInternal<<":"<<(seenNonInternal>vehicleLength*2)<<":"<<std::endl;
+
         firstLane = false;
         if (!setRequest || ((vLinkPass <= 0 || seen > dist) && hadNonInternal && seenNonInternal > vehicleLength * 2)) {
+           // Rudhir Degub
+            //std::cout<<"break"<<std::endl;
             break;
         }
+
+
+
         // the link was passed
         // compute the velocity to use when the link is not blocked by other vehicles
         //  the vehicle shall be not faster when reaching the next lane than allowed
@@ -836,6 +885,9 @@ MSVehicle::moveChecked() {
                 braking = true;
                 lastWasGreenCont = false;
                 link->removeApproaching(this);
+
+                // Rudhir debug
+                //std::cout<<getID()<<":"<<"brakeGap"<<std::endl;
                 break;
             }
             //
@@ -848,12 +900,18 @@ MSVehicle::moveChecked() {
                 if (ls == LINKSTATE_EQUAL) {
                     link->removeApproaching(this);
                 }
+
+                // Rudhir debug
+                //std::cout<<getID()<<":"<<"havePriority"<<std::endl;
                 break; // could be revalidated
             }
             // have waited; may pass if opened...
             if (opened) {
                 vSafe = (*i).myVLinkPass;
                 lastWasGreenCont = link->isCont() && (ls == LINKSTATE_TL_GREEN_MAJOR);
+
+                // Rudhir debug
+                //std::cout<<getID()<<":"<<"opened"<<std::endl;
             } else {
                 lastWasGreenCont = false;
                 vSafe = (*i).myVLinkWait;
@@ -861,11 +919,17 @@ MSVehicle::moveChecked() {
                 if (ls == LINKSTATE_EQUAL) {
                     link->removeApproaching(this);
                 }
+
+                // Rudhir debug
+                //std::cout<<getID()<<":"<<"Not opened"<<std::endl;
                 break;
             }
         } else {
             vSafe = (*i).myVLinkWait;
             braking = true;
+
+            // Rudhir debug
+            //std::cout<<getID()<<":"<<"not set request"<<std::endl;
             break;
         }
     }

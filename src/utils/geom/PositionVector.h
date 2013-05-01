@@ -141,6 +141,11 @@ public:
     /// Returns the position at the given length
     Position positionAtLengthPosition(SUMOReal pos) const;
 
+#ifdef SUMO_WITH_NETSIM
+    /// Returns the length for given position
+    SUMOReal LengthAtPosition(const Position& pos) const;
+#endif
+
     /// Returns the position at the given length
     Position positionAtLengthPosition2D(SUMOReal pos) const;
 

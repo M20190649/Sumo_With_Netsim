@@ -813,17 +813,30 @@ MSNet::createMsgEmitter(std::string& id,
 
     void MSNet::addValueVehicleState(std::string receiverId,
                                     std::string senderId,
-                                    double senderSpeed)
+                                    double senderSpeed,
+                                    double senderPosX,
+                                    double senderPosY,
+                                    double senderPosOnLane)
         {
         MSVehicleStateTable::VehicleState vs;
         vs.Id = senderId;
         vs.speed = senderSpeed;
+        vs.pos_x = senderPosX;
+        vs.pos_y = senderPosY;
+        vs.pos_on_lane = senderPosOnLane;
+
         myVSTable->addValueVehicleState(receiverId, vs);
         }
 
     void MSNet::displayVehicleStateTable()
         {
         myVSTable->displayVehicleStateTable();
+        }
+
+    MSVehicleStateTable::VehicleState MSNet::getSenderVehicleState(
+                                std::string receiverId, std::string senderId)
+        {
+        return myVSTable->getSenderVehicleState(receiverId, senderId);
         }
 #endif
 

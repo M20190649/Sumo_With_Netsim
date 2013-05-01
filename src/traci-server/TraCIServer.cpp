@@ -1051,13 +1051,14 @@ bool TraCIServer::commandSetValueVehicleStateTable()
             {
             //// Sender List
             int itemCnt = myInputStorage.readInt();
-            if (itemCnt != 2)
+            if (itemCnt != 5)
                 {
                 writeStatusCmd(CMD_SET_VEHICLE_STATE_TABLE, RTYPE_ERR,
                                "State length is invalid");
                 return false;
                 }
 
+            // Sender Id
             int dataType = myInputStorage.readUnsignedByte();
             if(dataType != TYPE_STRING)
                 {
@@ -1067,6 +1068,7 @@ bool TraCIServer::commandSetValueVehicleStateTable()
                 }
             std::string senderId = myInputStorage.readString();
 
+            // Speed
             dataType = myInputStorage.readUnsignedByte();
             if(dataType != TYPE_DOUBLE)
                 {
@@ -1076,10 +1078,43 @@ bool TraCIServer::commandSetValueVehicleStateTable()
                 }
             double senderSpeed = myInputStorage.readDouble();
 
+            // Pos_X
+            dataType = myInputStorage.readUnsignedByte();
+            if(dataType != TYPE_DOUBLE)
+                {
+                writeStatusCmd(CMD_SET_VEHICLE_STATE_TABLE, RTYPE_ERR,
+                               "Sender pos_x type is invalid");
+                return false;
+                }
+            double senderPosX = myInputStorage.readDouble();
+
+            // Pos_Y
+            dataType = myInputStorage.readUnsignedByte();
+            if(dataType != TYPE_DOUBLE)
+                {
+                writeStatusCmd(CMD_SET_VEHICLE_STATE_TABLE, RTYPE_ERR,
+                               "Sender pos_y type is invalid");
+                return false;
+                }
+            double senderPosY = myInputStorage.readDouble();
+
+            // Pos_On_Lane
+            dataType = myInputStorage.readUnsignedByte();
+            if(dataType != TYPE_DOUBLE)
+                {
+                writeStatusCmd(CMD_SET_VEHICLE_STATE_TABLE, RTYPE_ERR,
+                               "Sender pos_on_lane type is invalid");
+                return false;
+                }
+            double senderPosOnLane = myInputStorage.readDouble();
+
             /// Update the table
             MSNet::getInstance()->addValueVehicleState(receiverId,
                                                        senderId,
-                                                       senderSpeed);
+                                                       senderSpeed,
+                                                       senderPosX,
+                                                       senderPosY,
+                                                       senderPosOnLane);
             }
         else
             {

@@ -228,6 +228,17 @@ PositionVector::positionAtLengthPosition(SUMOReal pos) const {
     return myCont.back();
 }
 
+#ifdef SUMO_WITH_NETSIM
+SUMOReal
+PositionVector::LengthAtPosition(const Position& pos) const {
+    ContType::const_iterator i = myCont.begin();
+    const SUMOReal dist = (*i).distanceTo(pos);
+    if (dist < 0.0) {
+        return -1.0;
+    }
+    return dist;
+}
+#endif
 
 Position
 PositionVector::positionAtLengthPosition2D(SUMOReal pos) const {
@@ -288,7 +299,6 @@ PositionVector::positionAtLengthPosition(const Position& p1,
     }
     return p1 + (p2 - p1) * (pos / dist);
 }
-
 
 Position
 PositionVector::positionAtLengthPosition2D(const Position& p1,

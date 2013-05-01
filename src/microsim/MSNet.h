@@ -545,8 +545,13 @@ public:
     void clearVehicleStateTable();
     void addValueVehicleState(std::string receiverId,
                                 std::string senderId,
-                                double senderSpeed);
+                                double senderSpeed,
+                                double senderPosX,
+                                double senderPosY,
+                                double senderPosOnLane);
     void displayVehicleStateTable();
+    MSVehicleStateTable::VehicleState getSenderVehicleState(
+                            std::string receiverId, std::string senderId);
 #endif
 
 protected:
